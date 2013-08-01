@@ -1,54 +1,56 @@
 #!/bin/sh
 
 # run from rails root directory.
-# backup file must be gzipped
 
-VERSION=2013-07-16:0.0.1:go2null
+VERSION=2013-07-16:0.0.0:go2null
 # * Initial release
 # * Automated retrieving the database variables using code from
 #     http://www.redmine.org/projects/redmine/wiki/HowTo_Migrate_Redmine_to_a_new_server_to_a_new_Redmine_version
 # * Can specifiy backup file as input parameter
+VERSION=2013-08-01:0.1.0.:go2null
+# * NEW: acepts unzipped backup file to restore
 
 # User variables
-BAK_DIR='/var/backups'
+BAK_DIR="$HOME/Downloads"
 # Redmine instance
 REDMINE_ENV='production'
 REDMINE_DB_CONF=$(pwd)/config/database.yml
 
 # app functions
-printMsg () {
-        case "$1" in
-        1)
-                echo ''; echo "!! WARNING: $2"
-                ;;
-        2)
-                echo ''; echo "!! ERROR: $2"
-                exit $1
-                ;;
-        *)
-                echo ''; echo '!! ERROR: Unknown error.'
-                exit 99
-                ;;
-        esac
+printMsg() {
+	case "$1" in
+    1)
+		echo ''; echo "!! WARNING: $2"
+        ;;
+    2)
+		echo ''; echo "!! ERROR: $2"
+        exit $1
+        ;;
+    *)
+		echo ''; echo '!! ERROR: Unknown error.'
+        exit 99
+        ;;
+    esac
 }
 
 # validations
 [ -s "$REDMINE_DB_CONF" ] || printMsg 2 "Invalid database.yml '$REDMINE_DB_CONF'."
-MYSQL_DATABASE=$(grep -A 5 "$REDMINE_ENV:" "$REDMINE_DB_CONF" |sed -nr "s/.*database:.* (\w*)/\1/p")
-MYSQL_USER=$(grep -A 5 "$REDMINE_ENV:" "$REDMINE_DB_CONF" |sed -nr "s/.*username:.* (\w*)/\1/p")
-MYSQL_PASSWORD=$(grep -A 5 "$REDMINE_ENV:" "$REDMINE_DB_CONF" |sed -nr "s/.*password:.* (\w*)/\1/p")
+MYSQL_DATABASE=$(grep -A 5 "^$REDMINE_ENV:" "$REDMINE_DB_CONF" |sed -nr 's/.*database:[ \t]*(.*)/\1/p')
+MYSQL_USER=$(grep -A 5 "^$REDMINE_ENV:" "$REDMINE_DB_CONF"     |sed -nr 's/.*username:[ \t]*(.*)/\1/p')
+MYSQL_PASSWORD=$(grep -A 5 "^$REDMINE_ENV:" "$REDMINE_DB_CONF" |sed -nr 's/.*password:[ \t]*(.*)/\1/p')
 [ -z "$MYSQL_DATABASE" -o -z "$MYSQL_USER" -o -z "MYSQL_PASSWORD" ] && printMsg 2 "Invalid database.yml '$REDMINE_DB_CONF'."
-[ -z "$1" ] && { BAK_FILE=$BAK_DIR/db_$MYSQL_DATABASE.gz; } || { BAK_FILE=$1; }
+[ -f "$1" ] && BAK_FILE=$1
+[ -f "$BAK_FILE" ] || { BAK_FILE=$BAK_DIR/db_$MYSQL_DATABASE; }
+[ -f "$BAK_FILE" ] || { BAK_FILE=$BAK_FILE.gz; }
 [ -f "$BAK_FILE" ] || printMsg 2 "Invalid backup file to restore '$BAK_FILE'."
 { which mysql > /dev/null ; } || printMsg 2 "Cannot find 'mysqldump'."
 
+# uncompress backup, if needed?
+echo "$BAK_FILE" | grep '\.gz$'
+[ $? -eq 0 ] { gunzip "$BAK_FILE"; }
+
 # Database: Restore
 echo "** Restoring database '$MYSQL_DATABASE'. **"
-gunzip "$BAK_FILE" | \
-        /usr/bin/mysql -v --user="$MYSQL_USER" --password="$MYSQL_PASSWORD" "$MYSQL_DATABASE"
+/usr/bin/mysql -v --user="$MYSQL_USER" --password="$MYSQL_PASSWORD" "$MYSQL_DATABASE" < "$BAK_FILE"
+[ $? -gt 0 ] && { echo 'ERROR: Database restore failed.'; } || { echo "** Database '$MYSQL_DATABASE' restored. **"; }
 
-if [ $? -gt 0 ]; then
-        echo "ERROR: Database restore failed."
-else
-        echo "** Database '$MYSQL_DATABASE' restored. **"
-fi
