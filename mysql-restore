@@ -9,14 +9,17 @@ VERSION=2013-07-16:0.0.0:go2null
 # * Can specifiy backup file as input parameter
 VERSION=2013-08-01:0.1.0.:go2null
 # * NEW: acepts unzipped backup file to restore
+VERSION=2013-08-22:0.1.2:go2null
+# * FIX: fatal error in gzip check
+# * FIX: .gz not removed from filename after decompression
 
-# User variables
+# ** USER SETTINGS ** #
 BAK_DIR="$HOME/Downloads"
 # Redmine instance
 REDMINE_ENV='production'
 REDMINE_DB_CONF=$(pwd)/config/database.yml
 
-# app functions
+# ** HELPER FUNCTIONS ** #
 printMsg() {
 	case "$1" in
     1)
@@ -33,7 +36,15 @@ printMsg() {
     esac
 }
 
-# validations
+printHelp() {
+	echo "VERSION: $VERSION
+USAGE:
+	"$0" [mysql-dump-file[.gz]]
+"
+}
+
+
+# ** VALIDATIONS ** #
 [ -s "$REDMINE_DB_CONF" ] || printMsg 2 "Invalid database.yml '$REDMINE_DB_CONF'."
 MYSQL_DATABASE=$(grep -A 5 "^$REDMINE_ENV:" "$REDMINE_DB_CONF" |sed -nr 's/.*database:[ \t]*(.*)/\1/p')
 MYSQL_USER=$(grep -A 5 "^$REDMINE_ENV:" "$REDMINE_DB_CONF"     |sed -nr 's/.*username:[ \t]*(.*)/\1/p')
@@ -45,11 +56,12 @@ MYSQL_PASSWORD=$(grep -A 5 "^$REDMINE_ENV:" "$REDMINE_DB_CONF" |sed -nr 's/.*pas
 [ -f "$BAK_FILE" ] || printMsg 2 "Invalid backup file to restore '$BAK_FILE'."
 { which mysql > /dev/null ; } || printMsg 2 "Cannot find 'mysqldump'."
 
+#** MAIN ** #
 # uncompress backup, if needed?
 echo "$BAK_FILE" | grep '\.gz$'
-[ $? -eq 0 ] { gunzip "$BAK_FILE"; }
+[ $? -eq 0 ] && { gunzip "$BAK_FILE"; BAK_FILE=$(echo $BAK_FILE | sed 's/\.gz$//'); }
 
-# Database: Restore
+# restore database
 echo "** Restoring database '$MYSQL_DATABASE'. **"
 /usr/bin/mysql -v --user="$MYSQL_USER" --password="$MYSQL_PASSWORD" "$MYSQL_DATABASE" < "$BAK_FILE"
 [ $? -gt 0 ] && { echo 'ERROR: Database restore failed.'; } || { echo "** Database '$MYSQL_DATABASE' restored. **"; }
