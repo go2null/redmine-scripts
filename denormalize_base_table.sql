@@ -1,6 +1,7 @@
 DROP PROCEDURE IF EXISTS Execute_SQL;
 DROP FUNCTION  IF EXISTS Sanitize_Identifier;
 DROP PROCEDURE IF EXISTS Denormalize_Base_Table;
+DROP EVENT     IF EXISTS Generate_Denormalized_Base_Tables;
 
 DELIMITER //
 
@@ -213,7 +214,6 @@ thisProc: BEGIN
 		-- handle duplicate custom field names - possible for users and groups
 		IF LOCATE(CONCAT(' AS "',cfName, '"'), ttSqlSelect) > 0 THEN
 			SET cfName := CONCAT(cfName, cfId);
-		ELSE
 		END IF;
 
 		-- strip non-alphanum chars
@@ -280,12 +280,21 @@ thisProc: BEGIN
 END thisProc;
 //
 
+-- requires event_scheduler set to ON
+--  /etc/mysql/my.cnf (or ~/.my.cnf) [mysqld] event_scheduler = ON
+--  OR --event-scheduler=ON as a command-line parameter
+--  OR SET GLOBAL event_scheduler = ON; at mysql prompt (lost on restart thought)
+CREATE EVENT Generate_Denormalized_Base_Tables
+	ON SCHEDULE
+		EVERY 1 DAY
+		STARTS '2015-02-03 01:00:00'
+	DO
+		CALL Denormalize_Base_table('issues');
+		CALL Denormalize_Base_table('projects');
+		CALL Denormalize_Base_Table('versions');
+		CALL Denormalize_Base_table('users');
+//
+
 
 DELIMITER ;
-
-
--- CALL Denormalize_Base_table('issues');
--- CALL Denormalize_Base_table('projects');
--- CALL Denormalize_Base_Table('versions');
--- CALL Denormalize_Base_table('users');
 
