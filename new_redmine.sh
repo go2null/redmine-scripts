@@ -11,7 +11,7 @@
 [ -z $REDMINE_GROUP ]      && REDMINE_GROUP=$USER
 
 # ensure you are in the parent directory of the new redmine install
-mkdir $REDMINE_PARENT_DIR
+mkdir -p $REDMINE_PARENT_DIR
 cd $REDMINE_PARENT_DIR
 
 # Step 1 - Redmine application
