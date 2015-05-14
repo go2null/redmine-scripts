@@ -98,7 +98,7 @@ cd "$REDMINE_DIR"
 [ -z "$REDMINE_VERSION" ] && REDMINE_VERSION="$(git tag | tail -n 1)"
 BRANCH=$(printf '%s' "$REDMINE_VERSION" | tr -d '.')
 # checkout
-if git checkout -b "$BRANCH" >> "$LOG_FILE"; then
+if git checkout -b "$BRANCH" "$REDMINE_VERSION" >> "$LOG_FILE"; then
 	printf '%s\n' "Version '$REDMINE_VERSION' checked out as branch '$BRANCH'"
 else
 	printf '%s\n' "ERROR: Failed to create development branch '$BRANCH'."
