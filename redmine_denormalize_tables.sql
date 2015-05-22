@@ -1,13 +1,25 @@
+-- Version: 0.1.0
+
+-- old names
+
 DROP PROCEDURE IF EXISTS Execute_SQL;
 DROP FUNCTION  IF EXISTS Sanitize_Identifier;
 DROP PROCEDURE IF EXISTS Denormalize_Base_Table;
 DROP EVENT     IF EXISTS Generate_Denormalized_Base_Tables;
 
+-- current names
+DROP PROCEDURE IF EXISTS ExecuteSQL;
+DROP FUNCTION  IF EXISTS SanitizeIdentifier;
+DROP PROCEDURE IF EXISTS redmine_DenormalizeTable;
+DROP EVENT     IF EXISTS redmine_DenormalizeTables;
+
 DELIMITER //
 
 
+
+
 -- http://stackoverflow.com/questions/5895383/mysql-prepare-statement-in-stored-procedures
-CREATE PROCEDURE Execute_SQL(IN sqlQ VARCHAR(5000)) COMMENT 'Executes the statement'
+CREATE PROCEDURE ExecuteSQL(IN sqlQ VARCHAR(5000)) COMMENT 'Executes the statement'
 BEGIN
 	SET @sqlV=sqlQ;
 	PREPARE stmt FROM @sqlV;
@@ -17,12 +29,14 @@ END;
 //
 
 
+
+
 -- replaces all non-alnum chars (a-zA-Z0-9) with underscopres (_).
 -- optionalUnique is only used if baseName contains chars other than 'a-zA-Z0-9_ '.
 --   if optionalUnique is empty, then '0' is used.
 -- prefixes return value with '_' if the first char is a number.
 -- size 63 taken per http://dev.mysql.com/doc/refman/5.5/en/identifiers.html
-CREATE FUNCTION Sanitize_Identifier(baseName VARCHAR(63), optionalUnique VARCHAR(63))
+CREATE FUNCTION SanitizeIdentifier(baseName VARCHAR(63), optionalUnique VARCHAR(63))
 	RETURNS VARCHAR(63) DETERMINISTIC
 BEGIN
 	DECLARE prefix     CHAR(1) DEFAULT '_';
@@ -91,30 +105,30 @@ BEGIN
 END;
 //
 
--- test cases for Sanitize_Identifier function
+-- test cases for SanitizeIdentifier function
 -- [v]alid, [i]nvalid, [e]mpty, [s]pace with valid, [S]pace with invalid
 -- SELECT
--- 	 Sanitize_Identifier(''   ,'')     AS     _0_ee
--- 	,Sanitize_Identifier('abc','')     AS    abc_ve
--- 	,Sanitize_Identifier(''   ,'xyz')  AS    xyz_ev
--- 	,Sanitize_Identifier('abc','xyz')  AS    abc_vv
--- 	,Sanitize_Identifier(''   ,'@&*')  AS     _0_ei--
--- 	,Sanitize_Identifier('^$#','')     AS     _0_ie
--- 	,Sanitize_Identifier('^$#','@&*')  AS     _0_ii--
--- 	,Sanitize_Identifier('@&*','^$#')  AS     _0_iir--
--- 	,Sanitize_Identifier('abc','@&*')  AS    abc_vi
--- 	,Sanitize_Identifier('^$#','xyz')  AS    xyz_iv
--- 	,Sanitize_Identifier('a c','x z')  AS    a_c_ss
--- 	,Sanitize_Identifier('a c','@ *')  AS    a_c_sS
--- 	,Sanitize_Identifier('^ #','x z')  AS   _x_z_Ss
--- 	,Sanitize_Identifier('^ #','@ *')  AS     ___SS
+-- 	 SanitizeIdentifier(''   ,'')     AS     _0_ee
+-- 	,SanitizeIdentifier('abc','')     AS    abc_ve
+-- 	,SanitizeIdentifier(''   ,'xyz')  AS    xyz_ev
+-- 	,SanitizeIdentifier('abc','xyz')  AS    abc_vv
+-- 	,SanitizeIdentifier(''   ,'@&*')  AS     _0_ei--
+-- 	,SanitizeIdentifier('^$#','')     AS     _0_ie
+-- 	,SanitizeIdentifier('^$#','@&*')  AS     _0_ii--
+-- 	,SanitizeIdentifier('@&*','^$#')  AS     _0_iir--
+-- 	,SanitizeIdentifier('abc','@&*')  AS    abc_vi
+-- 	,SanitizeIdentifier('^$#','xyz')  AS    xyz_iv
+-- 	,SanitizeIdentifier('a c','x z')  AS    a_c_ss
+-- 	,SanitizeIdentifier('a c','@ *')  AS    a_c_sS
+-- 	,SanitizeIdentifier('^ #','x z')  AS   _x_z_Ss
+-- 	,SanitizeIdentifier('^ #','@ *')  AS     ___SS
 -- ;
 
 
 
 
 -- baseTable = ['issues', 'projects, 'users', 'versions']
-CREATE PROCEDURE Denormalize_Base_Table(IN baseTable VARCHAR(50))
+CREATE PROCEDURE redmine_DenormalizeTable(IN baseTable VARCHAR(50))
 	COMMENT 'creates an _baseTable for issues and projects'
 --	LANGUAGE SQL
 --	DETERMINISTIC
@@ -148,11 +162,6 @@ thisProc: BEGIN
 		-- SELECT id, name, field_format FROM custom_fields WHERE type IN (cfType);
 		SELECT id, name, field_format, multiple FROM custom_fields WHERE FIND_IN_SET(type, cfType);
 	DECLARE CONTINUE HANDLER FOR NOT FOUND SET done := TRUE;
-
-	-- sanitize input
---	IF NOT ((baseTable = 'issues') OR (baseTable = 'projects')) THEN
---		LEAVE thisProc;
---	END IF
 
 	SET customizedType := INSERT(baseTable, CHAR_LENGTH(baseTable), 1, '');
 	SET cfType         := CONCAT(customizedType, 'CustomField');
@@ -217,7 +226,7 @@ thisProc: BEGIN
 		END IF;
 
 		-- strip non-alphanum chars
-		SET cfName := Sanitize_Identifier(cfName, cfId);
+		SET cfName := SanitizeIdentifier(cfName, cfId);
 
 		-- TODO: handle 'multiple' more intelligently
 		IF cfMultiple THEN
@@ -256,27 +265,27 @@ thisProc: BEGIN
 	-- create custom values temp table
 	-- (this should be faster, than doing it all together, as it is only queries c_v table)
 	SET sqlQ := CONCAT('DROP TABLE IF EXISTS ', tempTable);
-	CALL Execute_SQL(sqlQ);
+	CALL ExecuteSQL(sqlQ);
 	SET sqlQ := CONCAT('CREATE TEMPORARY TABLE ', tempTable,
 		' SELECT customized_id AS id', ttSqlSelect,
 		' FROM custom_values WHERE customized_type = "', customizedType, '" GROUP BY customized_id;'
 	);
-	CALL Execute_SQL(sqlQ);
+	CALL ExecuteSQL(sqlQ);
 
 	-- create reportTable
 	SET sqlQ := CONCAT('DROP TABLE IF EXISTS ', reportTable);
-	CALL Execute_SQL(sqlQ);
+	CALL ExecuteSQL(sqlQ);
 	SET sqlQ := CONCAT('CREATE TABLE ', reportTable,
 		' SELECT rt.*', rtSqlSelect,
 		' FROM (SELECT * FROM ', baseTable, ' CROSS JOIN ', tempTable, ' USING (id)) AS rt', rtSqlFrom
 	);
-	CALL Execute_SQL(sqlQ);
+	CALL ExecuteSQL(sqlQ);
 
 	-- TODO: add indexes
 
 	-- clean up
 	SET sqlQ := CONCAT('DROP TABLE IF EXISTS ', tempTable);
-	CALL Execute_SQL(sqlQ);
+	CALL ExecuteSQL(sqlQ);
 END thisProc;
 //
 
@@ -284,15 +293,15 @@ END thisProc;
 --  /etc/mysql/my.cnf (or ~/.my.cnf) [mysqld] event_scheduler = ON
 --  OR --event-scheduler=ON as a command-line parameter
 --  OR SET GLOBAL event_scheduler = ON; at mysql prompt (lost on restart thought)
-CREATE EVENT Generate_Denormalized_Base_Tables
+CREATE EVENT redmine_DenormalizeTables
 	ON SCHEDULE
 		EVERY 1 DAY
 		STARTS '2015-02-03 01:00:00'
 	DO
-		CALL Denormalize_Base_table('issues');
-		CALL Denormalize_Base_table('projects');
-		CALL Denormalize_Base_Table('versions');
-		CALL Denormalize_Base_table('users');
+		CALL redmine_DenormalizeTable('issues');
+		CALL redmine_DenormalizeTable('projects');
+		CALL redmine_DenormalizeTable('versions');
+		CALL redmine_DenormalizeTable('users');
 //
 
 

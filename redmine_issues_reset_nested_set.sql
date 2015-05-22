@@ -1,11 +1,17 @@
 -- http://www.redmine.org/issues/3722#note-4
+-- Version: 0.1.0
 
+-- old names
 DROP PROCEDURE IF EXISTS Reset_Nested_Set_Issues;
 DROP PROCEDURE IF EXISTS Reset_Nested_Set_Issues_recurse;
 
+-- current names
+DROP PROCEDURE IF EXISTS redmine_issues_ResetNestedSet;
+DROP PROCEDURE IF EXISTS redmine_issues_ResetNestedSet_recurse;
+
 DELIMITER //
 
-CREATE PROCEDURE Reset_Nested_Set_Issues()
+CREATE PROCEDURE redmine_issues_ResetNestedSet()
 BEGIN
 	-- ensure root_id is correct for roots. Do it quickly here.
 	UPDATE issues SET root_id = id WHERE parent_id IS NULL;
@@ -14,11 +20,11 @@ BEGIN
 	SET @left_value = 1;
 
 	-- now do recusion
-	CALL Reset_Nested_Set_Issues_recurse(NULL, NULL);
+	CALL redmine_issues_ResetNestedSet_recurse(NULL, NULL);
 END;
 //
 
-CREATE PROCEDURE Reset_Nested_Set_Issues_recurse(root INTEGER, parent INTEGER)
+CREATE PROCEDURE redmine_issues_ResetNestedSet_recurse(root INTEGER, parent INTEGER)
 BEGIN
 	DECLARE done             INTEGER DEFAULT 0;
 	DECLARE node             INTEGER;
@@ -43,7 +49,7 @@ BEGIN
 		FETCH roots INTO node;
 		REPEAT
 		IF node IS NOT NULL THEN
-			CALL Reset_Nested_Set_Issues_recurse(node, node);
+			CALL redmine_issues_ResetNestedSet_recurse(node, node);
 			SET @left_value := @left_value + 1;
 		END IF;
 		FETCH roots INTO node;
@@ -52,7 +58,7 @@ BEGIN
 		FETCH children INTO node;
 		REPEAT
 		IF node IS NOT NULL THEN
-			CALL Reset_Nested_Set_Issues_recurse(root, node);
+			CALL redmine_issues_ResetNestedSet_recurse(root, node);
 			SET @left_value := @left_value + 1;
 		END IF;
 		FETCH children INTO node;
@@ -67,5 +73,5 @@ END;
 
 DELIMITER ;
 
--- CALL Reset_Nested_Set_Issues;
+-- CALL redmine_issues_ResetNestedSet;
 
