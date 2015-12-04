@@ -1,68 +1,254 @@
 #!/bin/sh
 
-# run from rails root directory.
-
-VERSION=2013-07-16:0.0.0:go2null
+# version=2013-07-16:0.0.0:go2null
 # * Initial release
 # * Automated retrieving the database variables using code from
 #     http://www.redmine.org/projects/redmine/wiki/HowTo_Migrate_Redmine_to_a_new_server_to_a_new_Redmine_version
 # * Can specifiy backup file as input parameter
-VERSION=2013-08-01:0.1.0.:go2null
+# version=2013-08-01:0.1.0:go2null
 # * NEW: acepts unzipped backup file to restore
-VERSION=2013-08-22:0.1.2:go2null
+# version=2013-08-22:0.1.2:go2null
 # * FIX: fatal error in gzip check
 # * FIX: .gz not removed from filename after decompression
+version=2015-12-03:0.2.0:go2null
+# * NEW: Refactor to include backup and restore functionality
 
-# ** USER SETTINGS ** #
-BAK_DIR="$HOME/Downloads"
-# Redmine instance
-REDMINE_ENV='production'
-REDMINE_DB_CONF=$(pwd)/config/database.yml
 
 # ** HELPER FUNCTIONS ** #
-printMsg() {
-	case "$1" in
-    1)
-		echo ''; echo "!! WARNING: $2"
-        ;;
-    2)
-		echo ''; echo "!! ERROR: $2"
-        exit $1
-        ;;
-    *)
-		echo ''; echo '!! ERROR: Unknown error.'
-        exit 99
-        ;;
-    esac
-}
 
-printHelp() {
-	echo "VERSION: $VERSION
-USAGE:
-	"$0" [mysql-dump-file[.gz]]
+print_help() {
+	self="${0#*/}"
+	printf %s "$self, version $version
+Backup and restore a Ruby on Rails MySQL database
+
+Usage:  $self [action] [options]
+
+Actions:
+  backup            Perform backup. [Default]
+  restore           Perform restore.
+
+Options:
+  -b, --backup-dir  Where to save/find the database dump file. [Default: \$HOME]
+                      Ignored if <backup-file> is a path.
+  -f, --backup-file Database dump file. [Default: db_<db-name>_<rails-env>.sql.gz]
+                      Backup:  Existing file will be renamed with file modification time.
+                      Restore: File does not have to be gzipped.
+  -r, --rails-root  Rails root directory. Default: [Default: \$PWD]
+  -e, --rails-env   Rails environment to dump/restore to. [Default: production]
+  -h, --help        Display help text and exit.
+  -v, --verbose     Display messages.
+  -V, --version     Display version info and exit.
+
 "
 }
 
+print_message() {
+	case "$1" in
+    'error') shift; printf '%s\n' "!! ERROR: $@"; exit 1; ;;
+    'warn' ) shift; printf '%s\n' "!! WARNING: $@"        ;;
+    *      )        printf '%s\n' "$@"                    ;;
+	esac
+}
 
-# ** VALIDATIONS ** #
-[ -s "$REDMINE_DB_CONF" ] || printMsg 2 "Invalid database.yml '$REDMINE_DB_CONF'."
-MYSQL_DATABASE=$(grep -A 5 "^$REDMINE_ENV:" "$REDMINE_DB_CONF" |sed -nr 's/.*database:[ \t]*(.*)/\1/p')
-MYSQL_USER=$(grep -A 5 "^$REDMINE_ENV:" "$REDMINE_DB_CONF"     |sed -nr 's/.*username:[ \t]*(.*)/\1/p')
-MYSQL_PASSWORD=$(grep -A 5 "^$REDMINE_ENV:" "$REDMINE_DB_CONF" |sed -nr 's/.*password:[ \t]*(.*)/\1/p')
-[ -z "$MYSQL_DATABASE" -o -z "$MYSQL_USER" -o -z "MYSQL_PASSWORD" ] && printMsg 2 "Invalid database.yml '$REDMINE_DB_CONF'."
-[ -f "$1" ] && BAK_FILE=$1
-[ -f "$BAK_FILE" ] || { BAK_FILE=$BAK_DIR/db_$MYSQL_DATABASE; }
-[ -f "$BAK_FILE" ] || { BAK_FILE=$BAK_FILE.gz; }
-[ -f "$BAK_FILE" ] || printMsg 2 "Invalid backup file to restore '$BAK_FILE'."
-{ which mysql > /dev/null ; } || printMsg 2 "Cannot find 'mysqldump'."
+# Sets: action, bak_dir, rails_env, rails_root
+set_defaults() {
+	action='backup'
+	bak_dir="$HOME"
+	rails_env='production'
+	rails_root="$(pwd)"
+}
+
+# Sets: action, bak_dir, bak_file_path, rails_env, rails_root
+get_params() {
+	# get input options
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			'backup'            ) action='backup'                 ;;
+			'restore'           ) action='restore'                ;;
+			'-b'|'--backup-dir' ) bak_dir="$2"        ; shift;    ;;
+			'-f'|'--backup-file') bak_file_path="$2"  ; shift;    ;;
+			'-e'|'--rails-env'  ) rails_env="$2"      ; shift;    ;;
+			'-r'|'--rails-root' ) rails_root="$2"     ; shift;    ;;
+			'-h'|'--help'       ) print_help          ; exit ;    ;;
+			'-v'|'--verbose'    ) verbose='--verbose'             ;;
+			'-V'|'--version'    ) echo "$version"     ; exit ;    ;;
+			*                   ) echo "Invalid parameter '$1'"   ;;
+		esac
+		shift
+	done
+}
+
+# Gets: rails_env, rails_root
+# Sets: db_name, db_user, db_pass
+set_rails() {
+	# rails
+	rails_db_conf="$rails_root/config/database.yml"
+	[ -r "$rails_db_conf" ] || print_message 'error' "Invalid database.yml '$rails_db_conf'."
+	# database
+	db_name="$(grep -A 5 "^$rails_env:" "$rails_db_conf" |sed -nr 's/.*database:[ \t]*(.*)/\1/p')"
+	db_user="$(grep -A 5 "^$rails_env:" "$rails_db_conf" |sed -nr 's/.*username:[ \t]*(.*)/\1/p')"
+	db_pass="$(grep -A 5 "^$rails_env:" "$rails_db_conf" |sed -nr 's/.*password:[ \t]*(.*)/\1/p')"
+	if [ -z "$db_name" ] || [ -z "$db_user" ] || [ -z "$db_pass" ]; then
+		print_message 'error' "Invalid database.yml '$rails_db_conf'."
+	fi
+	# special handing for empty password string as `bash` is escaping it badly
+	if [ "$db_pass" = '""' ] || [ "$db_pass" = "''" ]; then
+		unset db_pass
+	fi
+}
+
+# Gets: db_env, db_name
+# Sets: bak_dir, bak_file_path, bak_file_name
+set_backup() {
+	# backup file
+	if [ -z "$bak_file_path" ]; then
+		bak_file_name="db_${db_name}_${rails_env}.sql.gz"
+		bak_file_path="$bak_dir/$bak_file_name"
+	else
+		bak_file_name="${bak_file_path##*/}"
+		# backup dir
+		bak_file_dir="${bak_file_path%/*}"
+		[ "$bak_file_path" != "$bak_file_dir" ] && bak_dir="$bak_file_dir"
+	fi
+}
+
+# Gets: bak_dir
+# Sets: bak_file_name, bak_file_path, dbdumper, zipper
+validate_backup() {
+	dbdumper='mysqldump'
+	dbdumper="$(type -ap "$dbdumper" | tail -1)"
+	[ -z "$dbdumper" ] && print_message 'error' "Cannot find '$dbdumper'."
+
+	zipper='gzip'
+	zipper="$(type -ap "$zipper" | tail -1)"
+	if [ -z "$zipper" ]; then
+		print_message 'warn' 'Cannot find "gzip"'
+		bak_file_name="${bak_file_name%.gz}"
+		bak_file_path="${bak_file_path%.gz}"
+	elif [ "${bak_file_name%.gz}" = "$bak_file_name" ]; then
+		# ensure .gz extension
+		bak_file_name="${bak_file_name}.gz"
+		bak_file_path="${bak_file_path}.gz"
+	fi
+
+	[ -w "$bak_dir" ] || print_message 'error' "Invalid backup directory '$bak_dir'"
+
+	[ -e "$bak_file_path" ] && move_existing_backup
+}
+
+# Gets: bak_dir, bak_file_name, bak_file_path
+move_existing_backup() {
+	bak_file_timestamp="$(find "${bak_dir}/" -maxdepth 1 -type f -name "${bak_file_name}" -printf '%TY%Tm%Td-%TH%TM%TS')"
+	# strip fractional seconds
+	bak_file_timestamp="${bak_file_timestamp%.*}"
+
+	# bak_file_name = db_redmine_production.sql[.gz]
+	bak_file_ext="${bak_file_name#*.sql}"
+	if [ "$bak_file_ext" = "$bak_file_name" ]; then
+		# bak_file_name = db_redmine_production
+		bak_file_basename="$bak_file_name"
+		unset bak_file_ext
+	else
+		# bak_file_name = db_redmine_production.sql[.gz]
+		bak_file_basename="${bak_file_name%.sql*}"
+		bak_file_ext=".sql$bak_file_ext"
+	fi
+
+	bak_file_timestamped="$bak_dir/$bak_file_basename-$bak_file_timestamp$bak_file_ext"
+	if ! mv "$bak_file_path" "$bak_file_timestamped" &>/dev/null; then
+		print_message 'error' "Cannot move existing backup file '${bak_file_path}'"
+	fi
+}
+
+# Gets: bak_file_path, db_name, db_pass, db_user, dbdumper, zipper
+do_backup() {
+	print_message "** Backing up '$db_name' to '$bak_file_path'. **"
+
+	if [ -z "$zipper" ]; then
+		$dbdumper --verbose --user="$db_user" --password="$db_pass" "$db_name" \
+			          > "$bak_file_path"
+	else
+		$dbdumper --verbose --user="$db_user" --password="$db_pass" "$db_name" \
+			| $zipper > "$bak_file_path"
+	fi
+
+	if [ $? -gt 0 ]; then
+		print_message 'error' "Database '$db_name' back up to '$bak_file_path' failed."
+	else
+		print_message "** Database '$db_name' backed up to '$bak_file_path'. **"
+	fi
+}
+
+# Sets: bak_file_name, bak_file_path, dbclient, unzipper
+validate_restore() {
+	dbclient='mysql'
+	dbclient="$(type -ap "$dbclient" | tail -1)"
+	[ -z "$dbclient" ] && print_message 'error' "Cannot find '$dbclient'."
+
+	find_file_path
+
+	# check whether need to uncompress backup
+	if [ "${bak_file_name#*.sql}" = '.gz' ]; then
+		unzipper='gunzip'
+		unzipper="$(type -ap "$unzipper" | tail -1)"
+		[ -z "$unzipper" ] && print_message 'error' "Cannot find '$unzipper'."
+	fi
+}
+
+# Sets: bak_file_name, bak_file_path
+find_file_path() {
+	# try to find file
+	if [ -e "$bak_file_path" ]; then
+		validate_file_path
+	else
+		bak_file_path="${bak_file_path%.gz}"
+	  if [ -e "$bak_file_path" ]; then
+			validate_file_path
+		else
+			bak_file_path="${bak_file_path%.sql}"
+			validate_file_path
+		fi
+	fi
+	bak_file_name="${bak_file_path##*/}"
+}
+
+# Gets: bak_file_path
+validate_file_path() {
+	if [ ! -r "$bak_file_path" ]; then
+		print_message 'error' "Invalid backup file to restore '$bak_file_path'."
+	fi
+}
+
+# Gets: db_name, bak_file_path
+do_restore() {
+	print_message "** Restoring '$db_name' from '$bak_file_path'.**"
+
+	# uncompress backup, if needed
+	if [ -z "$unzipper" ]; then
+		$dbclient $verbose --user="$db_user" --password="$db_pass" "$db_name"
+	else
+		$unzipper "$bak_file_path" \
+			| $dbclient $verbose --user="$db_user" --password="$db_pass" "$db_name"
+	fi
+
+	if [ $? -gt 0 ]; then
+		print_message 'error' "Database '$db_name' restore from '$bak_file_path' failed."
+	else
+		print_message "** Database '$db_name' restored from '$bak_file_path'. **"
+	fi
+
+}
 
 #** MAIN ** #
-# uncompress backup, if needed?
-echo "$BAK_FILE" | grep '\.gz$'
-[ $? -eq 0 ] && { gunzip "$BAK_FILE"; BAK_FILE=$(echo $BAK_FILE | sed 's/\.gz$//'); }
-
-# restore database
-echo "** Restoring database '$MYSQL_DATABASE'. **"
-/usr/bin/mysql -v --user="$MYSQL_USER" --password="$MYSQL_PASSWORD" "$MYSQL_DATABASE" < "$BAK_FILE"
-[ $? -gt 0 ] && { echo 'ERROR: Database restore failed.'; } || { echo "** Database '$MYSQL_DATABASE' restored. **"; }
+set_defaults
+get_params "$@"
+set_rails
+set_backup
+if [ "$action" = "backup" ]; then
+	validate_backup
+	do_backup
+else
+	validate_restore
+	do_restore
+fi
 
