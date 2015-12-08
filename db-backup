@@ -88,7 +88,7 @@ set_rails() {
 	db_name="$(grep -A 5 "^$rails_env:" "$rails_db_conf" |sed -nr 's/.*database:[ \t]*(.*)/\1/p')"
 	db_user="$(grep -A 5 "^$rails_env:" "$rails_db_conf" |sed -nr 's/.*username:[ \t]*(.*)/\1/p')"
 	db_pass="$(grep -A 5 "^$rails_env:" "$rails_db_conf" |sed -nr 's/.*password:[ \t]*(.*)/\1/p')"
-	if [ -z "$db_name" ] || [ -z "$db_user" ] || [ -z "$db_pass" ]; then
+	if [ -z "$db_name" ] || [ -z "$db_user" ]; then
 		print_message 'error' "Invalid database.yml '$rails_db_conf'."
 	fi
 	# special handing for empty password string as `bash` is escaping it badly
