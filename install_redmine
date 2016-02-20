@@ -98,8 +98,17 @@ fi
 printf "\n${T_BOLD}%s${T_NORMAL}\n" 'Step 2 - Create an empty database and accompanying user'
 
 # create database and user (if user doesn't exist)
-echo "Enter your MySQL/MariaDB 'root' password:"
-if mysql -u root -p -e "
+echo "We'll try creating the database with $REDMINE_DB_USER.
+If that fails, we will retry with 'root'.
+So, on the first 'password' prompt enter the password for '$REDMINE_DB_USER'
+and if prompted again, enter for the password for 'root'."
+if mysql -u $REDMINE_DB_USER -p -e "
+	DROP DATABASE IF EXISTS $REDMINE_DB;
+	CREATE DATABASE $REDMINE_DB DEFAULT CHARACTER SET utf8 DEFAULT COLLATE utf8_unicode_ci;
+	"
+then
+	printf '%s\n' "Database '$REDMINE_DB' created by user '$REDMINE_DB_USER'."
+elif mysql -u root -p -e "
 	CHARSET utf8;
 	SET NAMES utf8 COLLATE utf8_unicode_ci;
 	SET character_set_server = utf8;
