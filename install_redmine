@@ -136,7 +136,9 @@ echo "Database configuration ('config/database.yml') created."
 
 printf "\n${T_BOLD}%s${T_NORMAL}\n" 'Step 4 - Dependencies installation'
 echo "Enter your 'sudo' password if requested:"
-if ! $SUDO gem install bundler; then
+[ -n "$http_proxy" ] && HTTP_PROXY="$http_proxy"
+[ -n "$HTTP_PROXY" ] && PROXY="--http-proxy=$HTTP_PROXY"
+if ! $SUDO gem install bundler $PROXY; then
 	echo 'ERROR: Failed to install "bundler". [install bundler]'
 	exit 1
 fi
