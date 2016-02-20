@@ -82,7 +82,7 @@ cd "$REDMINE_DIR"
 
 # checkout version
 # allow for versions like '3.' (latest 3-series) and '3.0' (latest 3.0 series)
-[ -n "$REDMINE_VERSION" ] && REDMINE_VERSION="$(git tag | grep "$REDMINE_VERSION" | tail -n 1)"
+[ -n "$REDMINE_VERSION" ] && REDMINE_VERSION="$(git tag -l --no-column | grep "$REDMINE_VERSION" | tail -n 1)"
 # default to latest version
 [ -z "$REDMINE_VERSION" ] && REDMINE_VERSION="$(git checkout $(git describe --tags $(git rev-list --tags --max-count=1)))"
 BRANCH=$(printf '%s' "$REDMINE_VERSION" | tr -d '.')
