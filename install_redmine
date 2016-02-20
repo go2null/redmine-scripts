@@ -17,9 +17,10 @@ VERSION=0.1.1
 # where to install Redmine
 [ -z "$REDMINE_PARENT_DIR" ] && REDMINE_PARENT_DIR="$HOME/src"
 [ -z "$REDMINE_DIR"        ] && REDMINE_DIR='redmine'
+
 if [ -n "$REDMINE_VERSION" ]; then
 	BRANCH=$(printf '%s' "$REDMINE_VERSION" | tr -d '.')
-	REDMINE_DIR="${REDMINE_DIR}_$BRANCH"
+	[ -z "$DONT_APPEND_BRANCH_TO_REDMINE_DIR" ] && REDMINE_DIR="${REDMINE_DIR}_$BRANCH"
 fi
 # Redmine system user on the server
 [ -z "$REDMINE_USER" ]       && REDMINE_USER="$USER"
