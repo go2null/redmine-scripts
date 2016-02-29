@@ -7,28 +7,32 @@
 #	which fails to build if PostgreSQL is not installed.
 
 # DEPENDS: git, ruby, mysql|mariadb
-VERSION=0.1.1
+VERSION=0.2.0
 
 # Allow variables to be specified on calling line
-# Redmine source
+
+# Which Redmine to get
 [ -z "$REDMINE_GIT" ]        && REDMINE_GIT='https://github.com/redmine/redmine.git'
 # Redmine version (Tag) to checkout.
 #REDMINE_VERSION='3.'
-# where to install Redmine
+
+# Where to install Redmine
 [ -z "$REDMINE_PARENT_DIR" ] && REDMINE_PARENT_DIR="$HOME/src"
 [ -z "$REDMINE_DIR"        ] && REDMINE_DIR='redmine'
-
 if [ -n "$REDMINE_VERSION" ]; then
 	BRANCH=$(printf '%s' "$REDMINE_VERSION" | tr -d '.')
 	[ -z "$DONT_APPEND_BRANCH_TO_REDMINE_DIR" ] && REDMINE_DIR="${REDMINE_DIR}_$BRANCH"
 fi
+
 # Redmine system user on the server
 [ -z "$REDMINE_USER" ]       && REDMINE_USER="$USER"
-[ -z "$REDMINE_GROUP" ]      && REDMINE_GROUP="$(id -gn)"
+[ -z "$REDMINE_GROUP" ]      && REDMINE_GROUP="$(id -gn $REDMINE_USER)"
+
 # Redmine database
 [ -z "$REDMINE_DB" ]         && REDMINE_DB="$REDMINE_DIR"
 [ -z "$REDMINE_DB_USER" ]    && REDMINE_DB_USER="$REDMINE_DB"
-# bundle env variables # export required as bundle apparently uses a subshell
+
+# bundle env variables (export required as bundle apparently uses a subshell)
 [ -z "$RAILS_ENV" ]          && export RAILS_ENV='production'
 [ -z "$REDMINE_LANG" ]       && export REDMINE_LANG='en'
 
