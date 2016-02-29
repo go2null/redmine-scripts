@@ -26,11 +26,12 @@ fi
 
 # Redmine system user on the server
 [ -z "$REDMINE_USER" ]       && REDMINE_USER="$USER"
-[ -z "$REDMINE_GROUP" ]      && REDMINE_GROUP="$(id -gn $REDMINE_USER)"
+[ -z "$REDMINE_GROUP" ]      && REDMINE_GROUP="$(id -gn "$REDMINE_USER")"
 
 # Redmine database
-[ -z "$REDMINE_DB" ]         && REDMINE_DB="$REDMINE_DIR"
-[ -z "$REDMINE_DB_USER" ]    && REDMINE_DB_USER="$REDMINE_DB"
+[ -z "$REDMINE_DB_NAME" ]    && REDMINE_DB_NAME="$REDMINE_DIR"
+[ -z "$REDMINE_DB_USER" ]    && REDMINE_DB_USER="$REDMINE_DB_NAME"
+read -sp "Enter database password for user $REDMINE_DB_USER: " REDMINE_DB_PSWD
 
 # bundle env variables (export required as bundle apparently uses a subshell)
 [ -z "$RAILS_ENV" ]          && export RAILS_ENV='production'
@@ -60,7 +61,7 @@ printf '%s\n' "REDMINE_PARENT_DIR = $REDMINE_PARENT_DIR" | tee -a "$LOG_FILE"
 printf '%s\n' "REDMINE_DIR        = $REDMINE_DIR"        | tee -a "$LOG_FILE"
 printf '%s\n' "REDMINE_USER       = $REDMINE_USER"       | tee -a "$LOG_FILE"
 printf '%s\n' "REDMINE_GROUP      = $REDMINE_GROUP"      | tee -a "$LOG_FILE"
-printf '%s\n' "REDMINE_DB         = $REDMINE_DB"         | tee -a "$LOG_FILE"
+printf '%s\n' "REDMINE_DB_NAME    = $REDMINE_DB_NAME"    | tee -a "$LOG_FILE"
 printf '%s\n' "REDMINE_DB_USER    = $REDMINE_DB_USER"    | tee -a "$LOG_FILE"
 printf '%s\n' "RAILS_ENV          = $RAILS_ENV"          | tee -a "$LOG_FILE"
 printf '%s\n' "REDMINE_LANG       = $REDMINE_LANG"       | tee -a "$LOG_FILE"
@@ -105,36 +106,36 @@ printf "\n${T_BOLD}%s${T_NORMAL}\n" 'Step 2 - Create an empty database and accom
 # create database and user (if user doesn't exist)
 echo "We'll try creating the database with $REDMINE_DB_USER.
 If that fails, we will retry with 'root'.
-So, on the first 'password' prompt enter the password for '$REDMINE_DB_USER'
-and if prompted again, enter for the password for 'root'."
-if mysql -u $REDMINE_DB_USER -p -e "
-	DROP DATABASE IF EXISTS $REDMINE_DB;
-	CREATE DATABASE $REDMINE_DB DEFAULT CHARACTER SET utf8 DEFAULT COLLATE utf8_unicode_ci;
+So, if you are prompted, please enter the database for 'root'."
+if mysql -u $REDMINE_DB_USER -p "$REDMINE_DB_PSWD" -e "
+	DROP DATABASE IF EXISTS $REDMINE_DB_NAME;
+	CREATE DATABASE $REDMINE_DB_NAME DEFAULT CHARACTER SET utf8 DEFAULT COLLATE utf8_unicode_ci;
 	"
 then
-	printf '%s\n' "Database '$REDMINE_DB' created by user '$REDMINE_DB_USER'."
-elif mysql -u root -p -e "
+	printf '%s\n' "Database '$REDMINE_DB_NAME' created by user '$REDMINE_DB_USER'."
+elif mysql -u root -p "$REDMINE_DB_PSWD" -e "
 	CHARSET utf8;
 	SET NAMES utf8 COLLATE utf8_unicode_ci;
 	SET character_set_server = utf8;
 	SET collation_server     = utf8_unicode_ci;
-	DROP DATABASE IF EXISTS $REDMINE_DB;
-	CREATE DATABASE $REDMINE_DB DEFAULT CHARACTER SET utf8 DEFAULT COLLATE utf8_unicode_ci;
-	GRANT ALL PRIVILEGES ON $REDMINE_DB.* TO '$REDMINE_DB_USER'@'localhost' IDENTIFIED BY '';
+	DROP DATABASE IF EXISTS $REDMINE_DB_NAME;
+	CREATE DATABASE $REDMINE_DB_NAME DEFAULT CHARACTER SET utf8 DEFAULT COLLATE utf8_unicode_ci;
+	GRANT ALL PRIVILEGES ON $REDMINE_DB_NAME.* TO '$REDMINE_DB_USER'@'localhost' IDENTIFIED BY '$REDMINE_DB_PSWD';
 	"
 then
-	printf '%s\n' "Database '$REDMINE_DB' created and user '$REDMINE_DB_USER' given full permission."
+	printf '%s\n' "Database '$REDMINE_DB_NAME' created and user '$REDMINE_DB_USER' given full permission."
 else
-	printf '%s\n' "ERROR: Failed to create database '$REDMINE_DB' and user '$REDMINE_DB_USER'."
+	printf '%s\n' "ERROR: Failed to create database '$REDMINE_DB_NAME' and user '$REDMINE_DB_USER'."
 	exit 1
 fi
 
 
 printf "\n${T_BOLD}%s${T_NORMAL}\n" 'Step 3 - Database connection configuration'
 # on branch $BRANCH
-cp config/database.yml.example                      config/database.yml
-sed -i "s|\(database:\) redmine$|\1 $REDMINE_DB|"   config/database.yml
-sed -i "s|\(username:\) root$|\1 $REDMINE_DB_USER|" config/database.yml
+cp config/database.yml.example                         config/database.yml
+sed -i "s|\(database:\) redmine$|\1 $REDMINE_DB_NAME|" config/database.yml
+sed -i "s|\(username:\) root$|\1 $REDMINE_DB_USER|"    config/database.yml
+sed -i "s|\(password:\) .*$|\1 $REDMINE_DB_PSWD|"      config/database.yml
 echo "Database configuration ('config/database.yml') created."
 
 
