@@ -21,7 +21,7 @@ VERSION=0.2.0
 [ -z "$REDMINE_DIR"        ] && REDMINE_DIR='redmine'
 if [ -n "$REDMINE_VERSION" ]; then
 	BRANCH=$(printf '%s' "$REDMINE_VERSION" | tr -d '.')
-	[ -z "$DONT_APPEND_BRANCH_TO_REDMINE_DIR" ] && REDMINE_DIR="${REDMINE_DIR}_$BRANCH"
+	[ -z "$REDMINE_DONT_APPEND_BRANCH_TO_DIR" ] && REDMINE_DIR="${REDMINE_DIR}_$BRANCH"
 fi
 
 # Redmine system user on the server
