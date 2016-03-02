@@ -57,7 +57,7 @@ fi
 # Redmine database
 [ -z "$REDMINE_DB_NAME" ]    && REDMINE_DB_NAME="$REDMINE_DIR"
 [ -z "$REDMINE_DB_USER" ]    && REDMINE_DB_USER="$REDMINE_DB_NAME"
-printf "Enter database password for user $REDMINE_DB_USER: "
+printf "Enter database password for user '$REDMINE_DB_USER':"
 read_secret REDMINE_DB_PSWD
 
 # bundle env variables (export required as bundle apparently uses a subshell)
@@ -75,6 +75,7 @@ fi
 T_NORMAL='\033[0m'
 T_BOLD='\033[1m'
 
+
 # init log
 LOG_FILE="/tmp/$(printf '%s' "$0-$REDMINE_PARENT_DIR-$REDMINE_DIR" | tr '/' '-' | tr ' ' '-').log"
 printf "${T_BOLD}%s${T_NORMAL}\n" 'Installion will be logged to'
@@ -91,6 +92,7 @@ printf '%s\n' "REDMINE_DB_NAME    = $REDMINE_DB_NAME"    | tee -a "$LOG_FILE"
 printf '%s\n' "REDMINE_DB_USER    = $REDMINE_DB_USER"    | tee -a "$LOG_FILE"
 printf '%s\n' "RAILS_ENV          = $RAILS_ENV"          | tee -a "$LOG_FILE"
 printf '%s\n' "REDMINE_LANG       = $REDMINE_LANG"       | tee -a "$LOG_FILE"
+
 
 # ensure you are in the parent directory of the new redmine install
 mkdir -p "$REDMINE_PARENT_DIR"
@@ -133,13 +135,13 @@ printf "\n${T_BOLD}%s${T_NORMAL}\n" 'Step 2 - Create an empty database and accom
 echo "We'll try creating the database with $REDMINE_DB_USER.
 If that fails, we will retry with 'root'.
 	So, if you are prompted, please enter the database for 'root'."
-	if mysql -u $REDMINE_DB_USER -p "$REDMINE_DB_PSWD" -e "
+	if mysql -u $REDMINE_DB_USER -p"$REDMINE_DB_PSWD" -e "
 		DROP DATABASE IF EXISTS $REDMINE_DB_NAME;
 		CREATE DATABASE $REDMINE_DB_NAME DEFAULT CHARACTER SET utf8 DEFAULT COLLATE utf8_unicode_ci;
 		"
 	then
 		printf '%s\n' "Database '$REDMINE_DB_NAME' created by user '$REDMINE_DB_USER'."
-	elif mysql -u root -p "$REDMINE_DB_PSWD" -e "
+	elif mysql -u root -p -e "
 		CHARSET utf8;
 		SET NAMES utf8 COLLATE utf8_unicode_ci;
 		SET character_set_server = utf8;
