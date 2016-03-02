@@ -7,7 +7,8 @@
 #	which fails to build if PostgreSQL is not installed.
 
 # DEPENDS: git, ruby, mysql|mariadb
-VERSION=0.2.0
+VERSION=0.3.1
+
 
 # internal functions
 
@@ -35,69 +36,73 @@ read_secret()
 	echo
 }
 
+
 # Allow variables to be specified on calling line
 
 # Which Redmine to get
-[ -z "$REDMINE_GIT" ]        && REDMINE_GIT='https://github.com/redmine/redmine.git'
+[ -z "$redmine_git" ]        && redmine_git='https://github.com/redmine/redmine.git'
 # Redmine version (Tag) to checkout.
-#REDMINE_VERSION='3.'
+#redmine_version='3.'
 
 # Where to install Redmine
-[ -z "$REDMINE_PARENT_DIR" ] && REDMINE_PARENT_DIR="$HOME/src"
-[ -z "$REDMINE_DIR"        ] && REDMINE_DIR='redmine'
-if [ -n "$REDMINE_VERSION" ]; then
-	BRANCH=$(printf '%s' "$REDMINE_VERSION" | tr -d '.')
-	[ -z "$REDMINE_DONT_APPEND_BRANCH_TO_DIR" ] && REDMINE_DIR="${REDMINE_DIR}_$BRANCH"
+[ -z "$install_parent_dir" ] && install_parent_dir="$HOME/src"
+[ -z "$install_dir"        ] && install_dir='redmine'
+if [ -n "$redmine_version" ]; then
+	redmine_branch=$(printf '%s' "$redmine_version" | tr -d '.')
+	[ -z "$dont_append_branch_to_install_dir" ] && install_dir="${install_dir}_$redmine_branch"
 fi
 
 # Redmine system user on the server
-[ -z "$REDMINE_USER" ]       && REDMINE_USER="$USER"
-[ -z "$REDMINE_GROUP" ]      && REDMINE_GROUP="$(id -gn "$REDMINE_USER")"
+[ -z "$install_user"  ]      && install_user="$USER"
+[ -z "$install_group" ]      && install_group="$(id -gn "$install_user")"
 
 # Redmine database
-[ -z "$REDMINE_DB_NAME" ]    && REDMINE_DB_NAME="$REDMINE_DIR"
-[ -z "$REDMINE_DB_USER" ]    && REDMINE_DB_USER="$REDMINE_DB_NAME"
-printf "Enter database password for user '$REDMINE_DB_USER':"
-read_secret REDMINE_DB_PSWD
+[ -z "$db_name" ]    && db_name="$install_dir"
+[ -z "$db_user" ]    && db_user="$db_name"
+printf "Enter database password for user '$db_user':"
+read_secret db_pswd
 
-# bundle env variables (export required as bundle apparently uses a subshell)
-[ -z "$RAILS_ENV" ]          && export RAILS_ENV='production'
+# Gems groups to install
+[ -z "$bundle_without"       ] && bundle_without='--without development test'
+[ "$bundle_without" = 'none' ] && bundle_without=''
+
+# 'bundle exec rake' env variables
+#	export required as bundle apparently uses a subshell
+[ -z "$RAILS_ENV"    ]       && export RAILS_ENV='production'
 [ -z "$REDMINE_LANG" ]       && export REDMINE_LANG='en'
 
+
 # internal variables
-if [ $(id -u) -eq 0 ]; then
-	SUDO=''
-elif command -v sudo >/dev/null; then
-	SUDO='sudo'
-else
-	SUDO=''
-fi
 T_NORMAL='\033[0m'
 T_BOLD='\033[1m'
+# used by 'gem'
+[ -n "$http_proxy"      ] && HTTP_PROXY="$http_proxy"
+[ -n "$http_proxy_user" ] && HTTP_PROXY_USER="$http_proxy_user"
+[ -n "$http_proxy_pass" ] && HTTP_PROXY_PASS="$http_proxy_pass"
 
 
 # init log
-LOG_FILE="/tmp/$(printf '%s' "$0-$REDMINE_PARENT_DIR-$REDMINE_DIR" | tr '/' '-' | tr ' ' '-').log"
+log_file="/tmp/$(printf '%s' "$0-$install_parent_dir-$install_dir" | tr '/' '-' | tr ' ' '-').log"
 printf "${T_BOLD}%s${T_NORMAL}\n" 'Installion will be logged to'
-printf '%s\n' "  $LOG_FILE"
-printf '\n'                                              | tee -a "$LOG_FILE"
-printf '%s\n' "$(date +"%F %T"): Configuration"          | tee -a "$LOG_FILE"
-printf '%s\n' "REDMINE_GIT        = $REDMINE_GIT"        | tee -a "$LOG_FILE"
-printf '%s\n' "REDMINE_VERSION    = $REDMINE_VERSION"    | tee -a "$LOG_FILE"
-printf '%s\n' "REDMINE_PARENT_DIR = $REDMINE_PARENT_DIR" | tee -a "$LOG_FILE"
-printf '%s\n' "REDMINE_DIR        = $REDMINE_DIR"        | tee -a "$LOG_FILE"
-printf '%s\n' "REDMINE_USER       = $REDMINE_USER"       | tee -a "$LOG_FILE"
-printf '%s\n' "REDMINE_GROUP      = $REDMINE_GROUP"      | tee -a "$LOG_FILE"
-printf '%s\n' "REDMINE_DB_NAME    = $REDMINE_DB_NAME"    | tee -a "$LOG_FILE"
-printf '%s\n' "REDMINE_DB_USER    = $REDMINE_DB_USER"    | tee -a "$LOG_FILE"
-printf '%s\n' "RAILS_ENV          = $RAILS_ENV"          | tee -a "$LOG_FILE"
-printf '%s\n' "REDMINE_LANG       = $REDMINE_LANG"       | tee -a "$LOG_FILE"
+printf '%s\n' "  $log_file"
+printf '\n'                                              | tee -a "$log_file"
+printf '%s\n' "$(date +"%F %T"): Configuration"          | tee -a "$log_file"
+printf '%s\n' "redmine_git        = $redmine_git"        | tee -a "$log_file"
+printf '%s\n' "redmine_version    = $redmine_version"    | tee -a "$log_file"
+printf '%s\n' "install_parent_dir = $install_parent_dir" | tee -a "$log_file"
+printf '%s\n' "install_dir        = $install_dir"        | tee -a "$log_file"
+printf '%s\n' "install_user       = $install_user"       | tee -a "$log_file"
+printf '%s\n' "install_group      = $install_group"      | tee -a "$log_file"
+printf '%s\n' "db_name            = $db_name"            | tee -a "$log_file"
+printf '%s\n' "db_user            = $db_user"            | tee -a "$log_file"
+printf '%s\n' "RAILS_ENV          = $RAILS_ENV"          | tee -a "$log_file"
+printf '%s\n' "REDMINE_LANG       = $REDMINE_LANG"       | tee -a "$log_file"
 
 
 # ensure you are in the parent directory of the new redmine install
-mkdir -p "$REDMINE_PARENT_DIR"
-if ! cd "$REDMINE_PARENT_DIR"; then
-	printf '%s\n' "ERROR: Failed to enter parent directory ('$REDMINE_PARENT_DIR')."
+mkdir -p "$install_parent_dir"
+if ! cd "$install_parent_dir"; then
+	printf '%s\n' "ERROR: Failed to enter parent directory ('$install_parent_dir')."
 	exit 1
 fi
 
@@ -106,25 +111,25 @@ printf "\n${T_BOLD}%s${T_NORMAL}\n" 'Step 1 - Redmine application'
 
 # clone repo.
 # leave git output to act as progress bar.
-if git clone "$REDMINE_GIT" "$REDMINE_DIR"; then
-	printf '%s\n' "Redmine cloned to '$REDMINE_PARENT_DIR/$REDMINE_DIR'."
+if git clone "$redmine_git" "$install_dir"; then
+	printf '%s\n' "Redmine cloned to '$install_parent_dir/$install_dir'."
 else
-	printf '%s\n' "ERROR: Failed to clone Redmine from '$REDMINE_GIT' to '$REDMINE_PARENT_DIR/$REDMINE_DIR'."
+	printf '%s\n' "ERROR: Failed to clone Redmine from '$redmine_git' to '$install_parent_dir/$install_dir'."
 	exit 1
 fi
-cd "$REDMINE_DIR"
+cd "$install_dir"
 
 # checkout version
 # allow for versions like '3.' (latest 3-series) and '3.0' (latest 3.0 series)
-[ -n "$REDMINE_VERSION" ] && REDMINE_VERSION="$(git tag -l --no-column | grep "$REDMINE_VERSION" | tail -n 1)"
+[ -n "$redmine_version" ] && redmine_version="$(git tag -l --no-column | grep "$redmine_version" | tail -n 1)"
 # default to latest version
-[ -z "$REDMINE_VERSION" ] && REDMINE_VERSION="$(git checkout $(git describe --tags $(git rev-list --tags --max-count=1)))"
-BRANCH=$(printf '%s' "$REDMINE_VERSION" | tr -d '.')
+[ -z "$redmine_version" ] && redmine_version="$(git checkout $(git describe --tags $(git rev-list --tags --max-count=1)))"
+redmine_branch=$(printf '%s' "$redmine_version" | tr -d '.')
 # checkout
-if git checkout -b "$BRANCH" "$REDMINE_VERSION" >> "$LOG_FILE"; then
-	printf '%s\n' "Version '$REDMINE_VERSION' checked out as branch '$BRANCH'"
+if git checkout -b "$redmine_branch" "$redmine_version" >> "$log_file"; then
+	printf '%s\n' "Version '$redmine_version' checked out as branch '$redmine_branch'"
 else
-	printf '%s\n' "ERROR: Failed to create development branch '$BRANCH'."
+	printf '%s\n' "ERROR: Failed to create development branch '$redmine_branch'."
 	exit 1
 fi
 
@@ -132,76 +137,70 @@ fi
 printf "\n${T_BOLD}%s${T_NORMAL}\n" 'Step 2 - Create an empty database and accompanying user'
 
 # create database and user (if user doesn't exist)
-echo "We'll try creating the database with $REDMINE_DB_USER.
+echo "We'll try creating the database with $db_user.
 If that fails, we will retry with 'root'.
-	So, if you are prompted, please enter the database for 'root'."
-	if mysql -u $REDMINE_DB_USER -p"$REDMINE_DB_PSWD" -e "
-		DROP DATABASE IF EXISTS $REDMINE_DB_NAME;
-		CREATE DATABASE $REDMINE_DB_NAME DEFAULT CHARACTER SET utf8 DEFAULT COLLATE utf8_unicode_ci;
+So, if you are prompted, please enter the database for 'root'."
+	if mysql -u $db_user -p"$db_pswd" -e "
+		DROP DATABASE IF EXISTS $db_name;
+		CREATE DATABASE $db_name DEFAULT CHARACTER SET utf8 DEFAULT COLLATE utf8_unicode_ci;
 		"
 	then
-		printf '%s\n' "Database '$REDMINE_DB_NAME' created by user '$REDMINE_DB_USER'."
+		printf '%s\n' "Database '$db_name' created by user '$db_user'."
 	elif mysql -u root -p -e "
 		CHARSET utf8;
 		SET NAMES utf8 COLLATE utf8_unicode_ci;
 		SET character_set_server = utf8;
 		SET collation_server     = utf8_unicode_ci;
-		DROP DATABASE IF EXISTS $REDMINE_DB_NAME;
-		CREATE DATABASE $REDMINE_DB_NAME DEFAULT CHARACTER SET utf8 DEFAULT COLLATE utf8_unicode_ci;
-		GRANT ALL PRIVILEGES ON $REDMINE_DB_NAME.* TO '$REDMINE_DB_USER'@'localhost' IDENTIFIED BY '$REDMINE_DB_PSWD';
+		DROP DATABASE IF EXISTS $db_name;
+		CREATE DATABASE $db_name DEFAULT CHARACTER SET utf8 DEFAULT COLLATE utf8_unicode_ci;
+		GRANT ALL PRIVILEGES ON $db_name.* TO '$db_user'@'localhost' IDENTIFIED BY '$db_pswd';
 		"
 	then
-		printf '%s\n' "Database '$REDMINE_DB_NAME' created and user '$REDMINE_DB_USER' given full permission."
+		printf '%s\n' "Database '$db_name' created and user '$db_user' given full permission."
 	else
-		printf '%s\n' "ERROR: Failed to create database '$REDMINE_DB_NAME' and user '$REDMINE_DB_USER'."
+		printf '%s\n' "ERROR: Failed to create database '$db_name' and user '$db_user'."
 		exit 1
 	fi
 
 
 	printf "\n${T_BOLD}%s${T_NORMAL}\n" 'Step 3 - Database connection configuration'
-	# on branch $BRANCH
+	# on branch $redmine_branch
 	cp config/database.yml.example                         config/database.yml
-	sed -i "s|\(database:\) redmine$|\1 $REDMINE_DB_NAME|" config/database.yml
-	sed -i "s|\(username:\) root$|\1 $REDMINE_DB_USER|"    config/database.yml
-	sed -i "s|\(password:\) .*$|\1 $REDMINE_DB_PSWD|"      config/database.yml
+	sed -i "s|\(database:\) redmine$|\1 $db_name|" config/database.yml
+	sed -i "s|\(username:\) root$|\1 $db_user|"    config/database.yml
+	sed -i "s|\(password:\) .*$|\1 $db_pswd|"      config/database.yml
 	echo "Database configuration ('config/database.yml') created."
 
 
 	printf "\n${T_BOLD}%s${T_NORMAL}\n" 'Step 4 - Dependencies installation'
-	echo "Enter your 'sudo' password if requested:"
-	[ -n "$http_proxy" ] && HTTP_PROXY="$http_proxy"
-	[ -n "$HTTP_PROXY" ] && PROXY="--http-proxy=$HTTP_PROXY"
-	if ! $SUDO gem install bundler $PROXY; then
+#	[ -n "$HTTP_PROXY" ] && PROXY="--http-proxy=$HTTP_PROXY"
+	#if ! gem install bundler --conservative --minimal-deps; then
+	if ! gem install bundler --conservative; then
 		echo 'ERROR: Failed to install "bundler". [install bundler]'
 		exit 1
 	fi
-	# Install mysql gem if not already installed, as it requires sudo
-	if ! $SUDO gem install mysql $PROXY; then
-		echo 'ERROR: Failed to install "bundler". [install mysql]'
-		exit 1
-	fi
-	if ! bundle install --no-deployment --without development test; then
+	if ! bundle install --no-deployment $bundle_without; then
 		echo 'ERROR: Failed to download dependencies. [bundle install].'
 		exit 1
 	fi
 
 
 	printf "\n\n${T_BOLD}%s${T_NORMAL}\n" 'Step 5 - Session store secret generation'
-	if ! bundle exec rake generate_secret_token >> "$LOG_FILE"; then
+	if ! bundle exec rake generate_secret_token >> "$log_file"; then
 		echo 'ERROR: Failed to initialize Redmine. [generate_secret_token]'
 		exit 1
 	fi
 
 
 	printf "\n\n${T_BOLD}%s${T_NORMAL}\n" 'Step 6 - Database schema objects creation'
-	if ! bundle exec rake db:migrate >> "$LOG_FILE"; then
+	if ! bundle exec rake db:migrate >> "$log_file"; then
 		echo 'ERROR: Failed to initialize Redmine. [db:migrate]'
 		exit 1
 	fi
 
 
 	printf "\n\n${T_BOLD}%s${T_NORMAL}\n" 'Step 7 - Database default data set'
-	if ! bundle exec rake redmine:load_default_data >> "$LOG_FILE"; then
+	if ! bundle exec rake redmine:load_default_data >> "$log_file"; then
 		echo 'ERROR: Failed to initialize Redmine. [redmine:load_default_data]'
 		exit 1
 	fi
@@ -209,17 +208,17 @@ If that fails, we will retry with 'root'.
 
 	printf "\n\n${T_BOLD}%s${T_NORMAL}\n" 'Step 8 - File system permissions'
 	mkdir -p tmp/pdf public/plugin_assets
-	$SUDO chown -R "$REDMINE_USER":"$REDMINE_GROUP" files log tmp public/plugin_assets
-	$SUDO chmod -R 755 files log tmp public/plugin_assets
+	chown -R "$install_user":"$install_group" files log tmp public/plugin_assets
+	chmod -R 755 files log tmp public/plugin_assets
 
-	printf '\n%s\n' "Installation of Redmine v$REDMINE_VERSION completed."
+	printf '\n%s\n' "Installation of Redmine v$redmine_version completed."
 
 
 	printf "\n\n${T_BOLD}%s${T_NORMAL}\n" 'Step 9 - Test the installation'
 	# open default browser before starying server
 	#	to allow leaving server in foreground (to allow CTRL+C break)
 	if which xdg-open >/dev/null 2>&1; then
-		xdg-open "$LOG_FILE" &
+		xdg-open "$log_file" &
 		xdg-open http://localhost:3000/ &
 	fi
 	# test for new location of 'rails' script (Redmine 3.x), falling back to old location.
