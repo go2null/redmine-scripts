@@ -9,6 +9,32 @@
 # DEPENDS: git, ruby, mysql|mariadb
 VERSION=0.2.0
 
+# internal functions
+
+# cribbed from http://stackoverflow.com/a/28393320/3366962
+# Read secret string
+read_secret()
+{
+	# Disable echo.
+	stty -echo
+
+	# Set up trap to ensure echo is enabled before exiting if the script
+	# is terminated while echo is disabled.
+	trap 'stty echo' EXIT
+
+	# Read secret.
+	read "$@"
+
+	# Enable echo.
+	stty echo
+	trap - EXIT
+
+	# Print a newline because the newline entered by the user after
+	# entering the passcode is not echoed. This ensures that the
+	# next line of output begins at a new line.
+	echo
+}
+
 # Allow variables to be specified on calling line
 
 # Which Redmine to get
@@ -31,7 +57,8 @@ fi
 # Redmine database
 [ -z "$REDMINE_DB_NAME" ]    && REDMINE_DB_NAME="$REDMINE_DIR"
 [ -z "$REDMINE_DB_USER" ]    && REDMINE_DB_USER="$REDMINE_DB_NAME"
-read -sp "Enter database password for user $REDMINE_DB_USER: " REDMINE_DB_PSWD
+printf "Enter database password for user $REDMINE_DB_USER: "
+read_secret REDMINE_DB_PSWD
 
 # bundle env variables (export required as bundle apparently uses a subshell)
 [ -z "$RAILS_ENV" ]          && export RAILS_ENV='production'
@@ -47,7 +74,6 @@ else
 fi
 T_NORMAL='\033[0m'
 T_BOLD='\033[1m'
-
 
 # init log
 LOG_FILE="/tmp/$(printf '%s' "$0-$REDMINE_PARENT_DIR-$REDMINE_DIR" | tr '/' '-' | tr ' ' '-').log"
@@ -106,98 +132,98 @@ printf "\n${T_BOLD}%s${T_NORMAL}\n" 'Step 2 - Create an empty database and accom
 # create database and user (if user doesn't exist)
 echo "We'll try creating the database with $REDMINE_DB_USER.
 If that fails, we will retry with 'root'.
-So, if you are prompted, please enter the database for 'root'."
-if mysql -u $REDMINE_DB_USER -p "$REDMINE_DB_PSWD" -e "
-	DROP DATABASE IF EXISTS $REDMINE_DB_NAME;
-	CREATE DATABASE $REDMINE_DB_NAME DEFAULT CHARACTER SET utf8 DEFAULT COLLATE utf8_unicode_ci;
-	"
-then
-	printf '%s\n' "Database '$REDMINE_DB_NAME' created by user '$REDMINE_DB_USER'."
-elif mysql -u root -p "$REDMINE_DB_PSWD" -e "
-	CHARSET utf8;
-	SET NAMES utf8 COLLATE utf8_unicode_ci;
-	SET character_set_server = utf8;
-	SET collation_server     = utf8_unicode_ci;
-	DROP DATABASE IF EXISTS $REDMINE_DB_NAME;
-	CREATE DATABASE $REDMINE_DB_NAME DEFAULT CHARACTER SET utf8 DEFAULT COLLATE utf8_unicode_ci;
-	GRANT ALL PRIVILEGES ON $REDMINE_DB_NAME.* TO '$REDMINE_DB_USER'@'localhost' IDENTIFIED BY '$REDMINE_DB_PSWD';
-	"
-then
-	printf '%s\n' "Database '$REDMINE_DB_NAME' created and user '$REDMINE_DB_USER' given full permission."
-else
-	printf '%s\n' "ERROR: Failed to create database '$REDMINE_DB_NAME' and user '$REDMINE_DB_USER'."
-	exit 1
-fi
+	So, if you are prompted, please enter the database for 'root'."
+	if mysql -u $REDMINE_DB_USER -p "$REDMINE_DB_PSWD" -e "
+		DROP DATABASE IF EXISTS $REDMINE_DB_NAME;
+		CREATE DATABASE $REDMINE_DB_NAME DEFAULT CHARACTER SET utf8 DEFAULT COLLATE utf8_unicode_ci;
+		"
+	then
+		printf '%s\n' "Database '$REDMINE_DB_NAME' created by user '$REDMINE_DB_USER'."
+	elif mysql -u root -p "$REDMINE_DB_PSWD" -e "
+		CHARSET utf8;
+		SET NAMES utf8 COLLATE utf8_unicode_ci;
+		SET character_set_server = utf8;
+		SET collation_server     = utf8_unicode_ci;
+		DROP DATABASE IF EXISTS $REDMINE_DB_NAME;
+		CREATE DATABASE $REDMINE_DB_NAME DEFAULT CHARACTER SET utf8 DEFAULT COLLATE utf8_unicode_ci;
+		GRANT ALL PRIVILEGES ON $REDMINE_DB_NAME.* TO '$REDMINE_DB_USER'@'localhost' IDENTIFIED BY '$REDMINE_DB_PSWD';
+		"
+	then
+		printf '%s\n' "Database '$REDMINE_DB_NAME' created and user '$REDMINE_DB_USER' given full permission."
+	else
+		printf '%s\n' "ERROR: Failed to create database '$REDMINE_DB_NAME' and user '$REDMINE_DB_USER'."
+		exit 1
+	fi
 
 
-printf "\n${T_BOLD}%s${T_NORMAL}\n" 'Step 3 - Database connection configuration'
-# on branch $BRANCH
-cp config/database.yml.example                         config/database.yml
-sed -i "s|\(database:\) redmine$|\1 $REDMINE_DB_NAME|" config/database.yml
-sed -i "s|\(username:\) root$|\1 $REDMINE_DB_USER|"    config/database.yml
-sed -i "s|\(password:\) .*$|\1 $REDMINE_DB_PSWD|"      config/database.yml
-echo "Database configuration ('config/database.yml') created."
+	printf "\n${T_BOLD}%s${T_NORMAL}\n" 'Step 3 - Database connection configuration'
+	# on branch $BRANCH
+	cp config/database.yml.example                         config/database.yml
+	sed -i "s|\(database:\) redmine$|\1 $REDMINE_DB_NAME|" config/database.yml
+	sed -i "s|\(username:\) root$|\1 $REDMINE_DB_USER|"    config/database.yml
+	sed -i "s|\(password:\) .*$|\1 $REDMINE_DB_PSWD|"      config/database.yml
+	echo "Database configuration ('config/database.yml') created."
 
 
-printf "\n${T_BOLD}%s${T_NORMAL}\n" 'Step 4 - Dependencies installation'
-echo "Enter your 'sudo' password if requested:"
-[ -n "$http_proxy" ] && HTTP_PROXY="$http_proxy"
-[ -n "$HTTP_PROXY" ] && PROXY="--http-proxy=$HTTP_PROXY"
-if ! $SUDO gem install bundler $PROXY; then
-	echo 'ERROR: Failed to install "bundler". [install bundler]'
-	exit 1
-fi
-# Install mysql gem if not already installed, as it requires sudo
-if ! $SUDO gem install mysql $PROXY; then
-	echo 'ERROR: Failed to install "bundler". [install mysql]'
-	exit 1
-fi
-if ! bundle install --no-deployment --without development test; then
-	echo 'ERROR: Failed to download dependencies. [bundle install].'
-	exit 1
-fi
+	printf "\n${T_BOLD}%s${T_NORMAL}\n" 'Step 4 - Dependencies installation'
+	echo "Enter your 'sudo' password if requested:"
+	[ -n "$http_proxy" ] && HTTP_PROXY="$http_proxy"
+	[ -n "$HTTP_PROXY" ] && PROXY="--http-proxy=$HTTP_PROXY"
+	if ! $SUDO gem install bundler $PROXY; then
+		echo 'ERROR: Failed to install "bundler". [install bundler]'
+		exit 1
+	fi
+	# Install mysql gem if not already installed, as it requires sudo
+	if ! $SUDO gem install mysql $PROXY; then
+		echo 'ERROR: Failed to install "bundler". [install mysql]'
+		exit 1
+	fi
+	if ! bundle install --no-deployment --without development test; then
+		echo 'ERROR: Failed to download dependencies. [bundle install].'
+		exit 1
+	fi
 
 
-printf "\n\n${T_BOLD}%s${T_NORMAL}\n" 'Step 5 - Session store secret generation'
-if ! bundle exec rake generate_secret_token >> "$LOG_FILE"; then
-	echo 'ERROR: Failed to initialize Redmine. [generate_secret_token]'
-	exit 1
-fi
+	printf "\n\n${T_BOLD}%s${T_NORMAL}\n" 'Step 5 - Session store secret generation'
+	if ! bundle exec rake generate_secret_token >> "$LOG_FILE"; then
+		echo 'ERROR: Failed to initialize Redmine. [generate_secret_token]'
+		exit 1
+	fi
 
 
-printf "\n\n${T_BOLD}%s${T_NORMAL}\n" 'Step 6 - Database schema objects creation'
-if ! bundle exec rake db:migrate >> "$LOG_FILE"; then
-	echo 'ERROR: Failed to initialize Redmine. [db:migrate]'
-	exit 1
-fi
+	printf "\n\n${T_BOLD}%s${T_NORMAL}\n" 'Step 6 - Database schema objects creation'
+	if ! bundle exec rake db:migrate >> "$LOG_FILE"; then
+		echo 'ERROR: Failed to initialize Redmine. [db:migrate]'
+		exit 1
+	fi
 
 
-printf "\n\n${T_BOLD}%s${T_NORMAL}\n" 'Step 7 - Database default data set'
+	printf "\n\n${T_BOLD}%s${T_NORMAL}\n" 'Step 7 - Database default data set'
 	if ! bundle exec rake redmine:load_default_data >> "$LOG_FILE"; then
-	echo 'ERROR: Failed to initialize Redmine. [redmine:load_default_data]'
-	exit 1
-fi
+		echo 'ERROR: Failed to initialize Redmine. [redmine:load_default_data]'
+		exit 1
+	fi
 
 
-printf "\n\n${T_BOLD}%s${T_NORMAL}\n" 'Step 8 - File system permissions'
-mkdir -p tmp/pdf public/plugin_assets
-$SUDO chown -R "$REDMINE_USER":"$REDMINE_GROUP" files log tmp public/plugin_assets
-$SUDO chmod -R 755 files log tmp public/plugin_assets
+	printf "\n\n${T_BOLD}%s${T_NORMAL}\n" 'Step 8 - File system permissions'
+	mkdir -p tmp/pdf public/plugin_assets
+	$SUDO chown -R "$REDMINE_USER":"$REDMINE_GROUP" files log tmp public/plugin_assets
+	$SUDO chmod -R 755 files log tmp public/plugin_assets
 
-printf '\n%s\n' "Installation of Redmine v$REDMINE_VERSION completed."
+	printf '\n%s\n' "Installation of Redmine v$REDMINE_VERSION completed."
 
 
-printf "\n\n${T_BOLD}%s${T_NORMAL}\n" 'Step 9 - Test the installation'
-# open default browser before starying server
-#	to allow leaving server in foreground (to allow CTRL+C break)
-if which xdg-open >/dev/null 2>&1; then
-	xdg-open "$LOG_FILE" &
-	xdg-open http://localhost:3000/ &
-fi
-# test for new location of 'rails' script (Redmine 3.x), falling back to old location.
-if [ -e bin/rails ]; then
-	bundle exec ruby    bin/rails server webrick -e $RAILS_ENV
-else
-	bundle exec ruby script/rails server webrick -e $RAILS_ENV
-fi
+	printf "\n\n${T_BOLD}%s${T_NORMAL}\n" 'Step 9 - Test the installation'
+	# open default browser before starying server
+	#	to allow leaving server in foreground (to allow CTRL+C break)
+	if which xdg-open >/dev/null 2>&1; then
+		xdg-open "$LOG_FILE" &
+		xdg-open http://localhost:3000/ &
+	fi
+	# test for new location of 'rails' script (Redmine 3.x), falling back to old location.
+	if [ -e bin/rails ]; then
+		bundle exec ruby    bin/rails server webrick -e $RAILS_ENV
+	else
+		bundle exec ruby script/rails server webrick -e $RAILS_ENV
+	fi
 
