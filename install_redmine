@@ -166,10 +166,10 @@ fi
 
 print_bold 'Step 3 - Database connection configuration'
 # on branch $redmine_branch
-cp config/database.yml.example                         config/database.yml
-sed -i "s|\(database:\) redmine$|\1 $db_name|" config/database.yml
-sed -i "s|\(username:\) root$|\1 $db_user|"    config/database.yml
-sed -i "s|\(password:\) .*$|\1 $db_pswd|"      config/database.yml
+cp config/database.yml.example                              config/database.yml
+sed -i "s|\(database:\) redmine\([a-z_]*\)$|\1 $db_name\2|" config/database.yml
+sed -i "s|\(username:\) root$|\1 $db_user|"                 config/database.yml
+sed -i "s|\(password:\) .*$|\1 $db_pswd|"                   config/database.yml
 echo "Database configuration ('config/database.yml') created."
 
 
