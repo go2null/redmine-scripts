@@ -87,18 +87,18 @@ T_BOLD='\033[1m'
 log_file="/tmp/$(printf '%s' "$0-$install_parent_dir-$install_dir" | tr '/' '-' | tr ' ' '-').log"
 printf "${T_BOLD}%s${T_NORMAL}\n" 'Installion will be logged to'
 printf '%s\n' "  $log_file"
-printf '\n'                                              | tee -a "$log_file"
-printf '%s\n' "$(date +"%F %T"): Configuration"          | tee -a "$log_file"
-printf '%s\n' "redmine_git        = $redmine_git"        | tee -a "$log_file"
-printf '%s\n' "redmine_version    = $redmine_version"    | tee -a "$log_file"
-printf '%s\n' "install_parent_dir = $install_parent_dir" | tee -a "$log_file"
-printf '%s\n' "install_dir        = $install_dir"        | tee -a "$log_file"
-printf '%s\n' "install_user       = $install_user"       | tee -a "$log_file"
-printf '%s\n' "install_group      = $install_group"      | tee -a "$log_file"
-printf '%s\n' "db_name            = $db_name"            | tee -a "$log_file"
-printf '%s\n' "db_user            = $db_user"            | tee -a "$log_file"
-printf '%s\n' "RAILS_ENV          = $RAILS_ENV"          | tee -a "$log_file"
-printf '%s\n' "REDMINE_LANG       = $REDMINE_LANG"       | tee -a "$log_file"
+printf '\n'                                                       | tee -a "$log_file"
+printf '%s\n' "$(date +"%F %T"): Configuration"                   | tee -a "$log_file"
+printf '%s\n' "redmine_git        = $redmine_git"                 | tee -a "$log_file"
+printf '%s\n' "redmine_version    = ${redmine_version:-<latest>}" | tee -a "$log_file"
+printf '%s\n' "install_parent_dir = $install_parent_dir"          | tee -a "$log_file"
+printf '%s\n' "install_dir        = $install_dir"                 | tee -a "$log_file"
+printf '%s\n' "install_user       = $install_user"                | tee -a "$log_file"
+printf '%s\n' "install_group      = $install_group"               | tee -a "$log_file"
+printf '%s\n' "db_name            = $db_name"                     | tee -a "$log_file"
+printf '%s\n' "db_user            = $db_user"                     | tee -a "$log_file"
+printf '%s\n' "RAILS_ENV          = $RAILS_ENV"                   | tee -a "$log_file"
+printf '%s\n' "REDMINE_LANG       = $REDMINE_LANG"                | tee -a "$log_file"
 
 
 # ensure you are in the parent directory of the new redmine install
@@ -124,7 +124,7 @@ cd "$install_dir"
 # allow for versions like '3.' (latest 3-series) and '3.0' (latest 3.0 series)
 [ -n "$redmine_version" ] && redmine_version="$(git tag -l --no-column | grep "$redmine_version" | tail -n 1)"
 # default to latest version
-[ -z "$redmine_version" ] && redmine_version="$(git checkout $(git describe --tags $(git rev-list --tags --max-count=1)))"
+[ -z "$redmine_version" ] && redmine_version="$(git describe --tags $(git rev-list --tags --max-count=1))"
 redmine_branch=$(printf '%s' "$redmine_version" | tr -d '.')
 # checkout
 if git checkout -b "$redmine_branch" "$redmine_version" >> "$log_file"; then
